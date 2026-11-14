@@ -1,0 +1,21 @@
+{
+  "name": "pulso",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Product intelligence platform — specs, reviews, comparisons for Philips trimmers",
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev": "concurrently --names api,web --prefix-colors blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "npm run build --workspace=apps/api",
+    "build:web": "npm run build --workspace=apps/web"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}

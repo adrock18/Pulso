@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Applicability {
+  AVAILABLE
+  UNKNOWN
+  NOT_APPLICABLE
+}
+
+enum ModerationStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  password     String
+  role         Role          @default(USER)
+  reviews      Review[]
+  userProducts UserProduct[]
+  createdAt    DateTime      @default(now())
+}
+
+model ProductFamily {
+  id          String    @id @default(cuid())
+  name        String
+  brand       String
+  category    String
+  description String?
+  products    Product[]
+}
+
+model Product {
+  id                  String          @id @default(cuid())
+  name                String
+  model               String
+  description         String?
+  image               String?
+  familyId            String
+  family              ProductFamily   @relation(fields: [familyId], references: [id])
+  specs               Spec[]
+  reviews             Review[]
+  serials             ProductSerial[]
+  avgRating           Float           @default(0)
+  reviewCount         Int             @default(0)
+  verifiedReviewCount Int             @default(0)
+  createdAt           DateTime        @default(now())
+}
+
+model Spec {
+  id            String        @id @default(cuid())
+  productId     String
+  product       Product       @relation(fields: [productId], references: [id])
+  key           String
+  value         String?
+  unit          String?
+  category      String
+  applicability Applicability @default(AVAILABLE)
+  source        String
+  verifiedAt    DateTime
+
+  @@unique([productId, key])
+}
+
+model ProductSerial {
+  id           String       @id @default(cuid())
+  hashedSerial String       @unique
+  productId    String
+  product      Product      @relation(fields: [productId], references: [id])
+  claimed      Boolean      @default(false)
+  claimedBy    UserProduct?
+}
+
+model UserProduct {
+  id         String        @id @default(cuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  serialId   String        @unique
+  serial     ProductSerial @relation(fields: [serialId], references: [id])
+  productId  String
+  review     Review?
+  verifiedAt DateTime      @default(now())
+}
+
+model Review {
+  id                String           @id @default(cuid())
+  productId         String
+  product           Product          @relation(fields: [productId], references: [id])
+  userId            String
+  user              User             @relation(fields: [userId], references: [id])
+  userProductId     String?          @unique
+  userProduct       UserProduct?     @relation(fields: [userProductId], references: [id])
+  isAnonymous       Boolean          @default(true)
+  overallRating     Int
+  batteryRating     Int?
+  buildRating       Int?
+  easeOfUseRating   Int?
+  performanceRating Int?
+  valueRating       Int?
+  positiveText      String?
+  negativeText      String?
+  purchaseDate      DateTime?
+  retailer          String?
+  status            ModerationStatus @default(PUBLISHED)
+  isVerified        Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@unique([userId, productId])
+}
