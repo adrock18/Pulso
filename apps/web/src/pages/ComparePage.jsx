@@ -1,229 +1,192 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
-  Layers, ChevronDown, ChevronRight, ArrowRight,
-  Package, Trophy, Minus, Info, GitCompareArrows,
+  Package, Scale, CircleDot, GitCompareArrows, X as XIcon,
+  BarChart3, Trophy, RefreshCw, ArrowRight,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { RatingBadge } from '@/components/star-rating';
 import { api } from '@/services/api';
+import ExplodedView from '@/components/compare/ExplodedView';
+import SpecCategoryCard from '@/components/compare/SpecCategoryCard';
+import VerdictCard from '@/components/compare/VerdictCard';
+import SwapButton from '@/components/compare/SwapButton';
 
-/** Keys whose values are purely numeric (for bar rendering). */
-const NUMERIC_KEYS = new Set([
-  'battery_runtime_minutes', 'battery_charge_time_hours', 'weight_grams',
-  'blade_width_mm', 'length_settings', 'attachments_count', 'wattage',
-  'max_temperature_c', 'heat_settings', 'speed_settings', 'heat_up_time_seconds',
-  'plate_width_mm', 'cord_length_m',
-]);
+/* ── Category display labels ── */
+const CATEGORY_LABELS = {
+  'beard-trimmer': 'Beard Trimmers',
+  'hair-clipper': 'Hair Clippers',
+  'body-groomer': 'Body Groomers',
+  'nose-trimmer': 'Nose Trimmers',
+  'multi-grooming': 'Multi-Grooming Kits',
+  trimmer: 'Trimmers',
+};
 
-/** Keys where a lower value is better. */
-const LOWER_IS_BETTER = new Set([
-  'battery_charge_time_hours', 'weight_grams', 'heat_up_time_seconds',
-]);
-
-function parseNum(val) {
-  if (!val) return null;
-  const n = parseFloat(val);
-  return isNaN(n) ? null : n;
+function categoryLabel(slug) {
+  return CATEGORY_LABELS[slug] || slug || 'products';
 }
 
-function displayValue(side) {
-  if (!side || side.applicability === null) return '—';
-  if (side.applicability === 'UNKNOWN') return 'Unknown';
-  if (side.applicability === 'NOT_APPLICABLE') return 'N/A';
-  return side.value || '—';
-}
-
-/** Determines winner: 'a', 'b', or null. */
-function getWinner(key, numA, numB) {
-  if (numA === null || numB === null) return null;
-  if (numA === numB) return null;
-  const lowerBetter = LOWER_IS_BETTER.has(key);
-  if (lowerBetter) return numA < numB ? 'a' : 'b';
-  return numA > numB ? 'a' : 'b';
-}
-
-/* ── Animated progress bar ── */
-function SpecBar({ value, maxValue, isWinner }) {
-  if (value === null || maxValue === null || maxValue === 0) return null;
-  const pct = Math.round((value / maxValue) * 100);
+/* ── Skeleton block for loading state ── */
+function SkeletonBar({ className = '' }) {
   return (
-    <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
-      <div
-        className={`h-full rounded-full animate-bar transition-colors ${
-          isWinner ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-primary/30'
-        }`}
-        style={{ width: `${pct}%` }}
-      />
+    <div className={`rounded-md bg-muted/50 animate-pulse ${className}`} />
+  );
+}
+
+function ComparisonSkeleton() {
+  return (
+    <div className="space-y-5">
+      {/* Exploded view skeletons */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="rounded-xl border border-border/40 p-8 flex flex-col items-center gap-4">
+          <SkeletonBar className="w-24 h-24 rounded-xl" />
+          <div className="flex gap-3">
+            <SkeletonBar className="w-16 h-6 rounded-full" />
+            <SkeletonBar className="w-20 h-6 rounded-full" />
+            <SkeletonBar className="w-14 h-6 rounded-full" />
+          </div>
+        </div>
+        <div className="rounded-xl border border-border/40 p-8 flex flex-col items-center gap-4">
+          <SkeletonBar className="w-24 h-24 rounded-xl" />
+          <div className="flex gap-3">
+            <SkeletonBar className="w-16 h-6 rounded-full" />
+            <SkeletonBar className="w-20 h-6 rounded-full" />
+            <SkeletonBar className="w-14 h-6 rounded-full" />
+          </div>
+        </div>
+      </div>
+      {/* Category card skeletons */}
+      {[1, 2, 3].map((n) => (
+        <div key={n} className="rounded-xl border border-border/40 overflow-hidden">
+          <div className="px-5 py-3.5 bg-muted/20">
+            <SkeletonBar className="w-32 h-5" />
+          </div>
+          <div className="px-5 py-3 space-y-3">
+            {[1, 2, 3].map((r) => (
+              <div key={r} className="grid grid-cols-3 gap-4">
+                <SkeletonBar className="h-4" />
+                <SkeletonBar className="h-4" />
+                <SkeletonBar className="h-4" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {/* Verdict skeleton */}
+      <div className="rounded-xl border border-border/40 p-5 space-y-3">
+        <SkeletonBar className="w-48 h-5" />
+        <SkeletonBar className="w-full h-3 rounded-full" />
+        <SkeletonBar className="w-40 h-4 mx-auto" />
+      </div>
     </div>
   );
 }
 
-/* ── Product selector card ── */
-function ProductSelector({ label, value, onChange, excludeId, products, side }) {
-  const product = products.find(p => p.id === value);
-  const sideColor = side === 'a' ? 'from-primary/10 to-primary/5' : 'from-chart-2/10 to-chart-2/5';
+/* ── Product selector card shown below the dropdown ── */
+function ProductPreviewCard({ product }) {
+  if (!product) {
+    return (
+      <div className="h-48 rounded-xl border border-dashed border-border/60 flex flex-col items-center justify-center gap-2 text-muted-foreground/40">
+        <Package size={28} />
+        <span className="text-xs">Select a product above</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-        <span className={`w-2 h-2 rounded-full ${side === 'a' ? 'bg-primary' : 'bg-chart-2'}`} />
-        {label}
-      </label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-11">
-          <SelectValue placeholder="Select a product..." />
-        </SelectTrigger>
-        <SelectContent>
-          {products.filter(p => p.id !== excludeId).map(p => (
-            <SelectItem key={p.id} value={p.id}>
-              <span className="font-medium">{p.model}</span>
-              <span className="text-muted-foreground ml-2 text-xs">{p.family?.name || ''}</span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      {product && (
-        <div className={`bg-gradient-to-br ${sideColor} rounded-xl p-4 space-y-3 border border-border/50`}>
-          <div className="flex items-center gap-3">
-            <div className="w-16 h-16 bg-background/80 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-border/50">
-              {product.image ? (
-                <img src={product.image} alt={product.name} className="w-full h-full object-contain p-1" />
-              ) : (
-                <Package size={24} className="text-muted-foreground/20" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-sm truncate">{product.name}</p>
-              <p className="text-xs text-muted-foreground line-clamp-1">{product.description}</p>
-            </div>
+    <Card className="border-border/60 overflow-hidden">
+      <CardContent className="p-0">
+        {/* Product image */}
+        <div className="h-28 bg-gradient-to-br from-muted/50 to-muted/20 flex items-center justify-center overflow-hidden">
+          {product.image ? (
+            <img src={product.image} alt={product.name} className="h-full object-contain p-3" />
+          ) : (
+            <Package size={36} className="text-muted-foreground/15" />
+          )}
+        </div>
+        {/* Info */}
+        <div className="p-4 space-y-3">
+          <div>
+            <p className="font-semibold text-sm leading-snug">{product.name}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{product.description}</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center justify-between gap-2">
             <RatingBadge rating={product.avgRating} reviewCount={product.reviewCount} />
             {product.priceRange && (
-              <span className="text-xs text-muted-foreground">{product.priceRange}</span>
+              <span className="text-xs font-medium text-muted-foreground">{product.priceRange}</span>
             )}
           </div>
         </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
-/* ── Collapsible spec category ── */
-function SpecCategory({ name, specs, comparison }) {
-  const [open, setOpen] = useState(true);
-
-  return (
-    <div className="rounded-xl border border-border/60 overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
-      >
-        <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          {name}
-        </span>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-[10px]">
-            {specs.length} spec{specs.length !== 1 ? 's' : ''}
-          </Badge>
-          {open ? <ChevronDown size={14} className="text-muted-foreground" /> : <ChevronRight size={14} className="text-muted-foreground" />}
-        </div>
-      </button>
-
-      {open && (
-        <div className="divide-y divide-border/40">
-          {/* Table header */}
-          <div className="grid grid-cols-[1.2fr_1fr_1fr] gap-4 px-5 py-2 bg-muted/10 text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-            <span>Specification</span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              {comparison.productA.model}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-chart-2" />
-              {comparison.productB.model}
-            </span>
-          </div>
-
-          {/* Spec rows */}
-          {specs.map(spec => {
-            const numA = parseNum(spec.productA?.value);
-            const numB = parseNum(spec.productB?.value);
-            const isNumeric = NUMERIC_KEYS.has(spec.key) && (numA !== null || numB !== null);
-            const maxNum = (numA !== null && numB !== null) ? Math.max(numA, numB) : (numA || numB);
-            const winner = isNumeric ? getWinner(spec.key, numA, numB) : null;
-            const isMutedA = !spec.productA || spec.productA.applicability === 'UNKNOWN' || spec.productA.applicability === 'NOT_APPLICABLE' || spec.productA.applicability === null;
-            const isMutedB = !spec.productB || spec.productB.applicability === 'UNKNOWN' || spec.productB.applicability === 'NOT_APPLICABLE' || spec.productB.applicability === null;
-
-            return (
-              <div
-                key={spec.key}
-                className={`grid grid-cols-[1.2fr_1fr_1fr] gap-4 px-5 py-3 text-sm hover:bg-muted/20 transition-colors ${
-                  spec.isDifferent ? 'bg-amber-50/40 dark:bg-amber-950/10' : ''
-                }`}
-              >
-                <span className="text-muted-foreground flex items-center gap-2">
-                  {spec.label}
-                  {spec.isDifferent && (
-                    <span className="w-1 h-1 rounded-full bg-amber-400 shrink-0" />
-                  )}
-                </span>
-
-                {/* Product A value */}
-                <div className={winner === 'a' ? 'winner-cell rounded px-2 py-1 -mx-2 -my-1' : ''}>
-                  <div className="flex items-center gap-1.5">
-                    {winner === 'a' && <Trophy size={12} className="text-emerald-500 shrink-0" />}
-                    <span className={isMutedA ? 'text-muted-foreground italic' : 'font-medium'}>
-                      {displayValue(spec.productA)}
-                    </span>
-                  </div>
-                  {isNumeric && numA !== null && (
-                    <SpecBar value={numA} maxValue={maxNum} isWinner={winner === 'a'} />
-                  )}
-                </div>
-
-                {/* Product B value */}
-                <div className={winner === 'b' ? 'winner-cell rounded px-2 py-1 -mx-2 -my-1' : ''}>
-                  <div className="flex items-center gap-1.5">
-                    {winner === 'b' && <Trophy size={12} className="text-emerald-500 shrink-0" />}
-                    <span className={isMutedB ? 'text-muted-foreground italic' : 'font-medium'}>
-                      {displayValue(spec.productB)}
-                    </span>
-                  </div>
-                  {isNumeric && numB !== null && (
-                    <SpecBar value={numB} maxValue={maxNum} isWinner={winner === 'b'} />
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Main compare page ── */
+/* ══════════════════════════════════════════════
+   Main compare page
+   ══════════════════════════════════════════════ */
 export default function ComparePage() {
-  const [searchParams] = useSearchParams();
+  const reduceMotion = useReducedMotion();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [idA, setIdA] = useState(searchParams.get('a') || '');
   const [idB, setIdB] = useState(searchParams.get('b') || '');
 
   const [products, setProducts] = useState([]);
-  useEffect(() => {
-    api.get('/products').then(setProducts).catch(() => {});
-  }, []);
-
   const [comparison, setComparison] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  /* ── Fetch all products on mount ── */
+  useEffect(() => {
+    api.get('/products').then(setProducts).catch(() => {});
+  }, []);
+
+  /* ── Update URL params when selections change ── */
+  useEffect(() => {
+    const params = {};
+    if (idA) params.a = idA;
+    if (idB) params.b = idB;
+    setSearchParams(params, { replace: true });
+  }, [idA, idB, setSearchParams]);
+
+  /* ── Determine Product A object and category ── */
+  const productA = useMemo(
+    () => products.find((p) => p.id === idA) || null,
+    [products, idA],
+  );
+
+  const productACategory = productA?.family?.category || null;
+
+  /* ── Filter Product B options to same category ── */
+  const productBOptions = useMemo(() => {
+    if (!productACategory) return products;
+    return products.filter(
+      (p) => p.family?.category === productACategory && p.id !== idA,
+    );
+  }, [products, productACategory, idA]);
+
+  const productB = useMemo(
+    () => products.find((p) => p.id === idB) || null,
+    [products, idB],
+  );
+
+  /* ── When Product A changes category, clear Product B ── */
+  useEffect(() => {
+    if (!idB || !productACategory) return;
+    const currentB = products.find((p) => p.id === idB);
+    if (currentB && currentB.family?.category !== productACategory) {
+      setIdB('');
+    }
+  }, [productACategory, idB, products]);
+
+  /* ── Fetch comparison data ── */
   useEffect(() => {
     if (!idA || !idB) {
       setComparison(null);
@@ -231,133 +194,336 @@ export default function ComparePage() {
     }
     setLoading(true);
     setError(null);
-    api.get(`/comparison?a=${encodeURIComponent(idA)}&b=${encodeURIComponent(idB)}`)
-      .then(data => { setComparison(data); setError(null); })
-      .catch(err => { setError(err.message); setComparison(null); })
+    api
+      .get(`/comparison?a=${encodeURIComponent(idA)}&b=${encodeURIComponent(idB)}`)
+      .then((data) => {
+        setComparison(data);
+        setError(null);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setComparison(null);
+      })
       .finally(() => setLoading(false));
   }, [idA, idB]);
 
-  const totalSpecs = comparison ? comparison.categories.reduce((sum, cat) => sum + cat.specs.length, 0) : 0;
-  const diffCount = comparison ? comparison.categories.reduce((sum, cat) => sum + cat.specs.filter(s => s.isDifferent).length, 0) : 0;
+  /* ── Derived stats ── */
+  const totalSpecs = comparison
+    ? comparison.categories.reduce((s, c) => s + c.specs.length, 0)
+    : 0;
+  const diffCount = comparison
+    ? comparison.categories.reduce(
+        (s, c) => s + c.specs.filter((x) => x.isDifferent).length,
+        0,
+      )
+    : 0;
+
+  /* ── Swap handler ── */
+  function swapProducts() {
+    setIdA(idB);
+    setIdB(idA);
+  }
+
+  /* ── Retry handler ── */
+  function retryComparison() {
+    if (!idA || !idB) return;
+    setLoading(true);
+    setError(null);
+    api
+      .get(`/comparison?a=${encodeURIComponent(idA)}&b=${encodeURIComponent(idB)}`)
+      .then((data) => {
+        setComparison(data);
+        setError(null);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setComparison(null);
+      })
+      .finally(() => setLoading(false));
+  }
+
+  /* ── Motion helpers ── */
+  const instant = { duration: 0 };
+  const fadeIn = reduceMotion
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: instant }
+    : {
+        initial: { opacity: 0, y: 12 },
+        animate: { opacity: 1, y: 0 },
+        transition: { type: 'spring', stiffness: 300, damping: 30 },
+      };
 
   return (
-    <div className="space-y-6">
-      {/* Breadcrumb */}
+    <div className="space-y-8">
+      {/* ── Breadcrumb ── */}
       <nav className="text-sm text-muted-foreground flex items-center gap-1.5">
         <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
         <span className="text-muted-foreground/40">/</span>
-        <span className="text-foreground">Compare</span>
+        <span className="text-foreground font-medium">Compare</span>
       </nav>
 
-      {/* Page header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-          <GitCompareArrows size={20} className="text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Compare Products</h1>
-          <p className="text-sm text-muted-foreground">Select two products for a detailed specification comparison</p>
-        </div>
-      </div>
-
-      {/* Product selectors with VS badge */}
-      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6">
-        <ProductSelector label="Product A" value={idA} onChange={setIdA} excludeId={idB} products={products} side="a" />
-
-        {/* VS badge */}
-        <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-          <div className="vs-badge w-10 h-10 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shadow-lg">
-            VS
+      {/* ── Page header ── */}
+      <div>
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <GitCompareArrows size={22} className="text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Compare Products</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Select two products to see a detailed specification comparison
+            </p>
           </div>
         </div>
-
-        <ProductSelector label="Product B" value={idB} onChange={setIdB} excludeId={idA} products={products} side="b" />
       </div>
 
-      {/* Loading state */}
-      {loading && (
-        <Card className="border-dashed">
-          <CardContent className="py-16 text-center space-y-3">
-            <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted-foreground">Loading comparison...</p>
-          </CardContent>
-        </Card>
-      )}
+      {/* ── Selectors row with swap button ── */}
+      <div className="relative grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-6 md:gap-4 items-start">
+        {/* Product A selector */}
+        <motion.div
+          layout={!reduceMotion}
+          layoutId={reduceMotion ? undefined : 'selector-a'}
+          transition={reduceMotion ? instant : { type: 'spring', stiffness: 300, damping: 30 }}
+          className="space-y-3"
+        >
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary" />
+            Product A
+          </label>
+          <Select value={idA} onValueChange={setIdA}>
+            <SelectTrigger className={`h-11 ${idA ? 'ring-2 ring-primary/20' : ''}`}>
+              <SelectValue placeholder="Choose a product..." />
+            </SelectTrigger>
+            <SelectContent>
+              {products
+                .filter((p) => p.id !== idB)
+                .map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="font-medium">{p.model}</span>
+                    <span className="text-muted-foreground ml-2 text-xs">{p.family?.name || ''}</span>
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <ProductPreviewCard product={productA} />
+        </motion.div>
 
-      {/* Error state */}
-      {error && !loading && (
-        <Card className="border-destructive/50">
-          <CardContent className="py-12 text-center space-y-2">
-            <p className="text-destructive font-medium">Comparison failed</p>
-            <p className="text-sm text-muted-foreground">{error}</p>
-          </CardContent>
-        </Card>
-      )}
+        {/* Swap button — centered between selectors */}
+        <div className="hidden md:flex items-center justify-center pt-10">
+          <SwapButton onSwap={swapProducts} />
+        </div>
+        {/* Mobile swap button */}
+        <div className="flex md:hidden items-center justify-center -my-2">
+          <SwapButton onSwap={swapProducts} />
+        </div>
 
-      {/* Empty state */}
-      {!comparison && !loading && !error && (
-        <Card className="border-dashed">
-          <CardContent className="py-20 text-center space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-muted/80 flex items-center justify-center">
-              <Layers size={28} className="text-muted-foreground/40" />
-            </div>
-            <div>
-              <p className="font-medium">Pick two products to compare</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Specs are matched by canonical keys — differences highlighted automatically
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Trophy size={12} className="text-emerald-500" />
-                Winner highlighted
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-400" />
-                Differences marked
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Minus size={12} />
-                Visual bars for numeric specs
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Summary stats bar */}
-      {comparison && !loading && (
-        <div className="flex items-center gap-3 text-sm">
-          <Badge variant="outline" className="gap-1.5">
-            <Info size={12} />
-            {totalSpecs} specs compared
-          </Badge>
-          <Badge className="bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            {diffCount} difference{diffCount !== 1 ? 's' : ''}
-          </Badge>
-          {comparison.productA.avgRating && comparison.productB.avgRating && (
-            <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5">
-              <Trophy size={12} className="text-emerald-500" />
-              indicates better value
-            </span>
+        {/* Product B selector */}
+        <motion.div
+          layout={!reduceMotion}
+          layoutId={reduceMotion ? undefined : 'selector-b'}
+          transition={reduceMotion ? instant : { type: 'spring', stiffness: 300, damping: 30 }}
+          className="space-y-3"
+        >
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-chart-2" />
+            Product B
+          </label>
+          <Select
+            value={idB}
+            onValueChange={setIdB}
+            disabled={!idA && productBOptions.length === 0}
+          >
+            <SelectTrigger className={`h-11 ${idB ? 'ring-2 ring-chart-2/20' : ''}`}>
+              <SelectValue placeholder="Choose a product..." />
+            </SelectTrigger>
+            <SelectContent>
+              {productBOptions
+                .filter((p) => p.id !== idA)
+                .map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="font-medium">{p.model}</span>
+                    <span className="text-muted-foreground ml-2 text-xs">{p.family?.name || ''}</span>
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          {/* Category filter label */}
+          {idA && productACategory && (
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <Scale size={11} />
+              Showing {categoryLabel(productACategory)} only
+            </p>
           )}
-        </div>
-      )}
+          <ProductPreviewCard product={productB} />
+        </motion.div>
+      </div>
 
-      {/* Comparison results */}
-      {comparison && !loading && (
-        <div className="space-y-4">
-          {comparison.categories.map(category => (
-            <SpecCategory
-              key={category.name}
-              name={category.name}
-              specs={category.specs}
-              comparison={comparison}
+      {/* ── Comparison body ── */}
+      <AnimatePresence mode="wait">
+        {/* Loading state */}
+        {loading && (
+          <motion.div
+            key="loading"
+            {...fadeIn}
+            exit={{ opacity: 0 }}
+            transition={reduceMotion ? instant : { duration: 0.15 }}
+          >
+            <ComparisonSkeleton />
+          </motion.div>
+        )}
+
+        {/* Error state */}
+        {error && !loading && (
+          <motion.div
+            key="error"
+            {...fadeIn}
+            exit={{ opacity: 0 }}
+            transition={reduceMotion ? instant : { duration: 0.15 }}
+          >
+            <Card className="border-destructive/40">
+              <CardContent className="py-10 text-center space-y-3">
+                <XIcon size={20} className="mx-auto text-destructive/60" />
+                <p className="text-destructive font-medium text-sm">Comparison failed</p>
+                <p className="text-xs text-muted-foreground">{error}</p>
+                <Button variant="outline" size="sm" className="gap-1.5 mt-2" onClick={retryComparison}>
+                  <RefreshCw size={14} />
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Empty state */}
+        {!comparison && !loading && !error && (
+          <motion.div
+            key="empty"
+            {...fadeIn}
+            exit={{ opacity: 0 }}
+            transition={reduceMotion ? instant : { duration: 0.15 }}
+          >
+            <div className="relative rounded-2xl border border-dashed border-border/50 compare-empty-grid overflow-hidden">
+              <div className="relative py-24 flex flex-col items-center text-center gap-5">
+                <div className="w-16 h-16 rounded-2xl bg-muted/60 flex items-center justify-center">
+                  <Scale size={28} className="text-muted-foreground/30" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">Select two products above</p>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+                    Every specification compared side by side, with winner highlighting and visual bars for numeric values.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Trophy size={12} className="text-emerald-500" />
+                    Better value highlighted
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="diff-dot" />
+                    Differences marked
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <BarChart3 size={12} />
+                    Visual bars for numbers
+                  </span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Comparison results */}
+        {comparison && !loading && (
+          <motion.div
+            key={`comparison-${comparison.productA.id}-${comparison.productB.id}`}
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
+            animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={reduceMotion ? instant : { type: 'spring', stiffness: 300, damping: 30 }}
+            className="space-y-6"
+          >
+            {/* Exploded views — side by side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <motion.div
+                className="rounded-xl border border-border/40 overflow-hidden"
+                initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
+                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+                transition={reduceMotion ? instant : { type: 'spring', stiffness: 300, damping: 30 }}
+              >
+                <div className="px-4 py-2.5 border-b border-border/30 bg-muted/15 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-primary" />
+                  <span className="text-xs font-semibold">{comparison.productA.model}</span>
+                </div>
+                <ExplodedView product={comparison.productA} />
+              </motion.div>
+
+              <motion.div
+                className="rounded-xl border border-border/40 overflow-hidden"
+                initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
+                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+                transition={
+                  reduceMotion
+                    ? instant
+                    : { type: 'spring', stiffness: 300, damping: 30, delay: 0.05 }
+                }
+              >
+                <div className="px-4 py-2.5 border-b border-border/30 bg-muted/15 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-chart-2" />
+                  <span className="text-xs font-semibold">{comparison.productB.model}</span>
+                </div>
+                <ExplodedView product={comparison.productB} />
+              </motion.div>
+            </div>
+
+            {/* Spec category cards — staggered entrance */}
+            <div className="space-y-3">
+              {comparison.categories.map((category, index) => (
+                <SpecCategoryCard
+                  key={category.name}
+                  category={category}
+                  productAModel={comparison.productA.model}
+                  productBModel={comparison.productB.model}
+                  delay={reduceMotion ? 0 : index * 0.1}
+                />
+              ))}
+            </div>
+
+            {/* Verdict card */}
+            <VerdictCard
+              categories={comparison.categories}
+              productA={comparison.productA}
+              productB={comparison.productB}
             />
-          ))}
-        </div>
-      )}
+
+            {/* Stats badges */}
+            <div className="flex items-center justify-center gap-4 pt-2">
+              <Badge variant="outline" className="gap-1.5 text-xs px-3 py-1">
+                <Scale size={12} />
+                <strong className="tabular-nums">{totalSpecs}</strong> specs compared
+              </Badge>
+              <Badge variant="outline" className="gap-1.5 text-xs px-3 py-1">
+                <CircleDot size={12} className="text-amber-500" />
+                <strong className="tabular-nums">{diffCount}</strong> difference{diffCount !== 1 ? 's' : ''}
+              </Badge>
+            </div>
+
+            {/* Bottom product links */}
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Button variant="outline" size="sm" asChild className="gap-1.5">
+                <Link to={`/products/${comparison.productA.id}`}>
+                  View {comparison.productA.model}
+                  <ArrowRight size={14} />
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild className="gap-1.5">
+                <Link to={`/products/${comparison.productB.id}`}>
+                  View {comparison.productB.model}
+                  <ArrowRight size={14} />
+                </Link>
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

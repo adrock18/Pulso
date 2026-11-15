@@ -452,45 +452,144 @@
 }
 
 /* ──────────────────────────────────────────────
-   VS Badge — single entrance pulse, then rests
+   VS Badge — entrance, then rests
    ────────────────────────────────────────────── */
 @keyframes vs-enter {
-  0%   { transform: scale(0.7); opacity: 0; }
-  60%  { transform: scale(1.08); opacity: 1; }
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.06); }
   100% { transform: scale(1); opacity: 1; }
 }
 
 .vs-badge {
-  animation: vs-enter 0.5s var(--ease-enter) 0.3s both;
-  box-shadow: 0 2px 12px oklch(0.42 0.19 265 / 0.25);
+  animation: vs-enter 0.45s var(--ease-enter) 0.2s both;
+  box-shadow:
+    0 0 0 4px var(--background),
+    0 0 0 5px var(--border),
+    0 4px 16px oklch(0.42 0.19 265 / 0.18);
 }
 
 .dark .vs-badge {
-  box-shadow: 0 2px 12px oklch(0.62 0.18 265 / 0.20);
+  box-shadow:
+    0 0 0 4px var(--background),
+    0 0 0 5px var(--border),
+    0 4px 16px oklch(0.62 0.18 265 / 0.15);
 }
 
 /* ──────────────────────────────────────────────
-   Winner glow for comparison cells
+   Comparison — product selector cards
    ────────────────────────────────────────────── */
+.compare-product-card {
+  transition: border-color var(--m-in) var(--ease), box-shadow var(--m-in) var(--ease);
+}
+
+.compare-product-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+/* ──────────────────────────────────────────────
+   Comparison — spec table
+   ────────────────────────────────────────────── */
+
+/* Winner cell: green left accent + subtle bg */
 .winner-cell {
-  background: oklch(0.55 0.15 145 / 6%);
-  border-left: 2px solid oklch(0.55 0.15 145 / 50%);
+  position: relative;
+  background: oklch(0.55 0.15 145 / 5%);
+}
+
+.winner-cell::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: oklch(0.55 0.18 145);
 }
 
 .dark .winner-cell {
   background: oklch(0.55 0.15 145 / 8%);
-  border-left: 2px solid oklch(0.55 0.15 145 / 40%);
+}
+
+.dark .winner-cell::before {
+  background: oklch(0.62 0.18 145);
+}
+
+/* Spec row hover */
+.spec-row {
+  transition: background var(--m-in) var(--ease);
+}
+
+.spec-row:hover {
+  background: var(--muted);
+}
+
+/* Difference indicator dot */
+.diff-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: oklch(0.65 0.18 60);
+  flex-shrink: 0;
 }
 
 /* ──────────────────────────────────────────────
-   Animated progress bars
+   Comparison — animated progress bars
    ────────────────────────────────────────────── */
 @keyframes bar-fill {
   from { width: 0%; }
 }
 
-.animate-bar {
-  animation: bar-fill 0.8s var(--ease-enter) both;
+.bar-fill {
+  animation: bar-fill 0.6s var(--ease-enter) both;
+}
+
+/* ──────────────────────────────────────────────
+   Comparison — score ring (for summary)
+   ────────────────────────────────────────────── */
+.score-ring {
+  --size: 56px;
+  --stroke: 4px;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--ring-color, var(--primary)) calc(var(--pct, 0) * 1%),
+    var(--muted) 0
+  );
+  display: grid;
+  place-items: center;
+}
+
+.score-ring::before {
+  content: '';
+  width: calc(var(--size) - var(--stroke) * 2);
+  height: calc(var(--size) - var(--stroke) * 2);
+  border-radius: 50%;
+  background: var(--card);
+  grid-area: 1/1;
+}
+
+.score-ring > * {
+  grid-area: 1/1;
+  z-index: 1;
+}
+
+/* ──────────────────────────────────────────────
+   Comparison — empty state illustration
+   ────────────────────────────────────────────── */
+.compare-empty-grid {
+  background-image:
+    linear-gradient(oklch(0.5 0.02 265 / 4%) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.5 0.02 265 / 4%) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.dark .compare-empty-grid {
+  background-image:
+    linear-gradient(oklch(0.7 0.02 265 / 3%) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.7 0.02 265 / 3%) 1px, transparent 1px);
 }
 
 /* ──────────────────────────────────────────────

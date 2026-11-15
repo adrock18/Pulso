@@ -29,6 +29,8 @@ function buildProductSummary(product) {
     avgRating: product.avgRating,
     reviewCount: product.reviewCount,
     priceRange: product.priceRange,
+    boxContents: product.boxContents ? JSON.parse(product.boxContents) : [],
+    highlights: product.highlights ? JSON.parse(product.highlights) : [],
   };
 }
 
@@ -57,17 +59,31 @@ export async function compareProducts(idA, idB) {
   }
 
   // 2. Fetch both products with their specs, ordered by category then key
+  const productSelect = {
+    id: true,
+    name: true,
+    model: true,
+    image: true,
+    avgRating: true,
+    reviewCount: true,
+    priceRange: true,
+    boxContents: true,
+    highlights: true,
+  };
+
   const [productA, productB] = await Promise.all([
     prisma.product.findUnique({
       where: { id: idA },
-      include: {
+      select: {
+        ...productSelect,
         family: { select: { name: true, brand: true, category: true } },
         specs: { orderBy: [{ category: 'asc' }, { key: 'asc' }] },
       },
     }),
     prisma.product.findUnique({
       where: { id: idB },
-      include: {
+      select: {
+        ...productSelect,
         family: { select: { name: true, brand: true, category: true } },
         specs: { orderBy: [{ category: 'asc' }, { key: 'asc' }] },
       },
@@ -88,6 +104,13 @@ export async function compareProducts(idA, idB) {
   if (!productB) {
     const error = new Error(`Product not found: ${idB}`);
     error.status = 404;
+    throw error;
+  }
+
+  // 3b. Reject cross-category comparison
+  if (productA.family.category !== productB.family.category) {
+    const error = new Error('Products must be in the same category to compare');
+    error.status = 400;
     throw error;
   }
 
@@ -161,6 +184,7 @@ export async function compareProducts(idA, idB) {
   return {
     productA: buildProductSummary(productA),
     productB: buildProductSummary(productB),
+    category: productA.family.category,
     categories,
   };
 }
