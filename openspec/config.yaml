@@ -1,0 +1,41 @@
+schema: spec-driven
+githubCopilot:
+  cloudAgent: false
+
+context: |
+  ProductPulse — product intelligence platform for India market, Philips trimmers.
+  Stack: React + Vite frontend, Express + Prisma backend, PostgreSQL on Neon.
+  Build feature by feature, each complete before the next. Keep specs focused and practical.
+  The comparison engine is the core differentiator — protect it above all else.
+  Read CLAUDE.md for full project context, data model, and development rules.
+
+rules:
+  proposal:
+    - Keep proposals concise — no more than 300 words
+    - Always state what is out of scope for this change
+    - Reference CLAUDE.md for stack and architecture decisions
+  design:
+    - Include Prisma model changes where relevant
+    - Include API endpoint shapes (method, path, request, response)
+    - Keep business logic in the backend
+  tasks:
+    - Break tasks into chunks of max 2 hours
+    - Each task must be independently testable
+    - Order tasks so each produces a working checkpoint
+    - Include seed data tasks where the feature needs demo data
+  spec:
+    - Include clear acceptance criteria
+    - Distinguish required vs stretch behavior
+    - Call out edge cases for unknown/not-applicable spec handling
+
+operations:
+  apply:
+    guidance:
+      - Read CLAUDE.md before starting implementation
+      - Validate all API inputs with Zod
+      - Explain code in beginner-friendly language
+      - Test after each task before moving to the next
+  archive:
+    guidance:
+      - Summarize what was built and what was deferred
+      - Update CHANGELOG.md with the completed change

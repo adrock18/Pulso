@@ -39,7 +39,6 @@ playwright.config.js
 # Local tooling
 .agents/
 .claude/
-openspec/
 CLAUDE.md
 .neon
 neon.ts
