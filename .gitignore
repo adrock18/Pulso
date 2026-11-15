@@ -30,8 +30,17 @@ npm-debug.log*
 # Coverage
 coverage/
 
+# Testing
+tests/
+test-results/
+playwright-report/
+playwright.config.js
+
 # Local tooling
 .agents/
 .claude/
 openspec/
 CLAUDE.md
+.neon
+neon.ts
+.tmp-*

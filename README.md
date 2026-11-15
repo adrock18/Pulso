@@ -1,116 +1,137 @@
-# Pulso
+# Pulso — Product Intelligence Platform
 
-Product intelligence platform for Philips trimmers — real specs, verified reviews, dynamic comparisons.
+Pulso is a product intelligence platform for Philips personal care products. It combines manufacturer-published specifications, customer reviews, dynamic product comparisons, and feedback analytics — all in one place.
 
-## What It Does
-
-- **Browse products** with real, sourced specifications grouped by category
-- **Compare any two products** side-by-side with canonical spec matching and difference highlighting
-- **Submit verified reviews** — prove ownership via serial number, choose to display anonymously or by name
-- **View analytics** — rating distributions, aspect averages, product trends
+**Live:** Deployed on Render + Neon (PostgreSQL)
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, Vite, Tailwind CSS v4, shadcn/ui, React Router, Recharts |
-| Backend | Express 5, Prisma ORM, Zod validation |
-| Database | PostgreSQL (Neon) |
-| Auth | JWT + bcryptjs |
-| Hosting | Render (Static Site + Web Service) |
+| Layer | Choice |
+|---|---|
+| Frontend | React 19 + Vite + Tailwind CSS v4 + React Router + Recharts |
+| Backend | Express 5 + Prisma ORM |
+| Database | PostgreSQL on Neon |
+| Auth | bcryptjs + JWT |
+| Validation | Zod |
+| Security | Helmet + express-rate-limit |
 
-## Getting Started
+## Features
+
+- **Product Catalog** — 12 Philips products across 6 categories (beard trimmers, multi-grooming kits, body groomers, electric shavers, hair dryers, hair straighteners) with gender segmentation, search, and filtering
+- **Dynamic Comparison** — Select any two products, compare specs by canonical keys, visual spec bars, differences highlighted. Swap either product without page reload
+- **Authentication** — Register, login, JWT sessions. Admin role for protected operations
+- **Reviews** — Authenticated review submission with anonymity toggle, aspect ratings, serial number verification for "Verified Purchase" badge. One review per user per product
+- **Analytics** — Rating distribution charts, aspect averages, verified/unverified counts. Admin trends dashboard
+- **Community** — Cross-product review feed with filter tabs (All / Verified / Most Helpful)
+
+## Local Setup
 
 ### Prerequisites
 
 - Node.js 20+
-- PostgreSQL database ([Neon](https://neon.tech) free tier recommended)
+- npm 10+
+- A PostgreSQL database (Neon recommended for zero-config)
 
-### Setup
+### 1. Clone and install
 
 ```bash
-# Clone and install
-git clone https://github.com/adrock18/Pulso.git
-cd Pulso
+git clone <repo-url> pulso
+cd pulso
 npm install
+```
 
-# Configure environment
+### 2. Configure environment
+
+```bash
+# Backend
 cp apps/api/.env.example apps/api/.env
-# Edit apps/api/.env with your DATABASE_URL, JWT_SECRET
+# Edit apps/api/.env with your values:
+#   DATABASE_URL=postgresql://...  (your Neon connection string)
+#   JWT_SECRET=your-secret-key
+#   CLIENT_URL=http://localhost:5173
+```
 
-# Set up database
+```bash
+# Frontend
+cp apps/web/.env.example apps/web/.env
+# Default VITE_API_BASE_URL=http://localhost:5000/api is usually correct
+```
+
+### 3. Set up the database
+
+```bash
 cd apps/api
-npx prisma migrate dev
-npx prisma db seed
+npx prisma migrate dev    # Create tables
 cd ../..
-
-# Start development
-npm run dev
+npm run seed              # Populate with demo data
 ```
 
-Open **http://localhost:5173** — frontend and backend both start with one command.
+### 4. Run locally
 
-## Project Structure
-
-```
-pulso/
-├── apps/
-│   ├── web/          React frontend (Vite + Tailwind + shadcn/ui)
-│   └── api/          Express backend (Prisma + Zod + JWT)
-├── scripts/          Seed data
-├── docs/             Architecture documentation
-├── CHANGELOG.md
-└── README.md
+```bash
+npm run dev               # Starts both API (port 5000) and web (port 5173)
 ```
 
-## Features
+Or separately:
+```bash
+npm run dev:api           # API only
+npm run dev:web           # Frontend only
+```
 
-### Product Catalog
-Browse 4 Philips trimmers with real specifications. Each spec shows its source and verification date. Specs are grouped by category (Battery, Blade, Build, General) and display three states: available values, "Unknown" for unestablished data, and "N/A" for non-applicable specs.
+## Demo Walkthrough
 
-### Dynamic Comparison Engine
-Select any two products and compare specifications side-by-side. The engine matches specs by canonical keys — not hardcoded tables. Swap either product instantly. Differences are highlighted. Unknown data is never treated as a disadvantage.
+### Browse Products
+1. Visit `http://localhost:5173`
+2. Browse by category (Men's Grooming → Beard Trimmers) or use the search
+3. Click a product to see grouped specs with source attribution
 
-### Authentication
-Register and log in with JWT-based sessions. Admin role for protected operations. All authorization enforced server-side.
+### Compare Products
+1. Go to **Compare** in the nav
+2. Select two products from the dropdowns
+3. See specs matched by canonical keys with differences highlighted and visual bars for numeric values
 
-### Reviews with Serial Verification
-Authenticated users submit reviews with an anonymity toggle. Optionally provide a product serial number for "Verified Purchase" status. One review per user per product. Anonymity and verification are independent — a verified reviewer can still choose to appear anonymous.
+### Write a Review
+1. Register at `/register` (or login: `user@productpulse.com` / `user123`)
+2. Navigate to any product detail page
+3. Fill out the review form with ratings, text, and optionally a serial number for verification
+4. Demo serial format: `SN-{MODEL}-001` (e.g., `SN-BT321115-001`)
 
-### Product Analytics
-Rating distribution, aspect-level averages (Battery, Build Quality, Ease of Use, Performance, Value for Money), verified vs. unverified review counts. Admin view of product trends.
+### Admin Features
+1. Login as admin: `admin@productpulse.com` / `admin123`
+2. Visit `/admin/trends` for product trend indicators
+
+## Seed Data
+
+- **12 products** with 140 specifications across 12 product families
+- **24 serial numbers** (2 per product, bcrypt-hashed)
+- **2 users**: admin and demo
+- **8 demo reviews** with varied ratings, retailers, anonymity, and verification
 
 ## API Endpoints
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | /api/products | Public | List products with search |
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | /api/health | Public | Health check |
+| GET | /api/products | Public | List with search/filter |
 | GET | /api/products/:id | Public | Product detail with specs |
-| GET | /api/comparison?a=&b= | Public | Compare two products |
-| POST | /api/auth/register | Public | Register user |
-| POST | /api/auth/login | Public | Login, returns JWT |
-| GET | /api/auth/me | Auth | Current user profile |
-| POST | /api/reviews | Auth | Submit review |
 | GET | /api/products/:id/reviews | Public | Product reviews |
-| PUT | /api/reviews/:id | Owner | Edit own review |
-| POST | /api/verification | Auth | Verify serial number |
+| GET | /api/comparison?a=&b= | Public | Dynamic comparison |
+| POST | /api/auth/register | Public | Register |
+| POST | /api/auth/login | Public | Login |
+| GET | /api/auth/me | Auth | Current user |
+| POST | /api/reviews | Auth | Submit review |
+| PUT | /api/reviews/:id | Auth | Edit own review |
+| GET | /api/reviews/recent | Public | Recent reviews feed |
+| POST | /api/verification | Auth | Verify serial |
+| GET | /api/user-products | Auth | Verified products |
 | GET | /api/analytics/products/:id | Public | Product analytics |
 | GET | /api/analytics/trends | Admin | Product trends |
 
-## Roadmap
+## Known Limitations
 
-- [x] Project scaffold (monorepo, Express, React, Prisma, shadcn/ui)
-- [ ] Product catalog with seed data and API
-- [ ] Dynamic comparison engine
-- [ ] Authentication (register, login, JWT, admin role)
-- [ ] Reviews with serial verification and anonymity toggle
-- [ ] Product analytics with Recharts
-- [ ] Deployment to Render + Neon
-
-## Architecture
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system diagrams, data model, design decisions, and security architecture.
-
-## License
-
-Private project.
+- No password reset or OAuth (demo only)
+- No review moderation UI (reviews default to PUBLISHED)
+- No admin CRUD UI (use seed scripts + Prisma Studio)
+- Serial verification uses bcrypt compare in a loop (fine for demo scale, not production scale)
+- No pagination on product listing
+- Philips products only (single brand)

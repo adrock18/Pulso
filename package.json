@@ -2,6 +2,7 @@
   "name": "pulso",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Product intelligence platform — specs, reviews, comparisons for Philips trimmers",
   "workspaces": [
     "apps/web",
@@ -13,9 +14,18 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "build": "npm run build:api && npm run build:web",
     "build:api": "npm run build --workspace=apps/api",
-    "build:web": "npm run build --workspace=apps/web"
+    "build:web": "npm run build --workspace=apps/web",
+    "seed": "node scripts/seed.js"
+  },
+  "prisma": {
+    "schema": "apps/api/prisma/schema.prisma"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "concurrently": "^10.0.7"
+  },
+  "dependencies": {
+    "@neon/config": "^1.14.0",
+    "@neon/env": "^2.1.3"
   }
 }

@@ -3,18 +3,20 @@
  */
 
 export const GENDERS = [
-  { id: 'men', label: "Men's Grooming", icon: '🧔' },
-  { id: 'women', label: "Women's Care", icon: '💇' },
+  { id: 'men', label: "Men's Grooming", icon: 'User' },
+  { id: 'women', label: "Women's Care", icon: 'Sparkles' },
 ];
 
 export const CATEGORIES = [
-  { id: 'all', label: 'All Products', gender: null, icon: '📦' },
-  { id: 'beard-trimmer', label: 'Beard Trimmers', gender: 'men', icon: '🪒' },
-  { id: 'multi-grooming', label: 'Multi Grooming Kits', gender: 'men', icon: '✂️' },
-  { id: 'body-grooming', label: 'Body Groomers', gender: 'men', icon: '🧴' },
-  { id: 'shaver', label: 'Electric Shavers', gender: 'men', icon: '🪒' },
-  { id: 'hair-dryer', label: 'Hair Dryers', gender: 'women', icon: '💨' },
-  { id: 'hair-straightener', label: 'Hair Straighteners', gender: 'women', icon: '🔥' },
+  { id: 'all', label: 'All Products', gender: null, icon: 'Package' },
+  { id: 'beard-trimmer', label: 'Beard Trimmers', gender: 'men', icon: 'Scissors' },
+  { id: 'multi-grooming', label: 'Multi Grooming Kits', gender: 'men', icon: 'Wrench' },
+  { id: 'body-grooming', label: 'Body Groomers', gender: 'men', icon: 'Shield' },
+  { id: 'oneblade', label: 'OneBlade', gender: 'men', icon: 'Zap' },
+  { id: 'hair-clipper', label: 'Hair Clippers', gender: 'men', icon: 'Grip' },
+  { id: 'shaver', label: 'Electric Shavers', gender: 'men', icon: 'CircleDot' },
+  { id: 'hair-dryer', label: 'Hair Dryers', gender: 'women', icon: 'Wind' },
+  { id: 'hair-straightener', label: 'Hair Straighteners', gender: 'women', icon: 'Flame' },
 ];
 
 export function getCategoriesByGender(gender) {

@@ -1,5 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import {
+  LayoutGrid, List, Search, SlidersHorizontal, Star, X, Package,
+  GitCompareArrows,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -9,7 +13,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { RatingBadge } from '@/components/star-rating';
-import { PRODUCTS, CATEGORIES, GENDERS, getCategoriesByGender, displaySpecValue } from '@/data/products';
+import { CategoryIcon } from '@/lib/icons';
+import { CATEGORIES, GENDERS, getCategoriesByGender } from '@/data/products';
+import { api } from '@/services/api';
 
 const SORT_OPTIONS = [
   { value: 'rating-desc', label: 'Highest Rated' },
@@ -42,34 +48,8 @@ function Breadcrumb({ gender, category }) {
   );
 }
 
-function GridIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <rect x="3" y="3" width="7" height="7" rx="1" strokeWidth="2" />
-      <rect x="14" y="3" width="7" height="7" rx="1" strokeWidth="2" />
-      <rect x="3" y="14" width="7" height="7" rx="1" strokeWidth="2" />
-      <rect x="14" y="14" width="7" height="7" rx="1" strokeWidth="2" />
-    </svg>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-    </svg>
-  );
-}
-
 function ProductCardGrid({ product }) {
-  const highlights = [
-    product.specs.find(s => s.key === 'battery_runtime_minutes'),
-    product.specs.find(s => s.key === 'wattage'),
-    product.specs.find(s => s.key === 'length_settings' || s.key === 'attachments_count'),
-    product.specs.find(s => s.key === 'weight_grams'),
-  ].filter(Boolean).slice(0, 3);
-
-  const categoryLabel = CATEGORIES.find(c => c.id === product.category)?.label || product.category;
+  const categoryLabel = CATEGORIES.find(c => c.id === product.family?.category)?.label || product.family?.category || '';
 
   return (
     <div className="group relative">
@@ -79,7 +59,7 @@ function ProductCardGrid({ product }) {
             {product.image ? (
               <img src={product.image} alt={product.name} className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-300" />
             ) : (
-              <span className="text-6xl opacity-20">📦</span>
+              <Package size={48} className="text-muted-foreground/15" />
             )}
             <div className="absolute top-2.5 left-2.5 flex gap-1.5">
               <Badge variant="secondary" className="text-[10px] font-normal">{categoryLabel}</Badge>
@@ -95,13 +75,13 @@ function ProductCardGrid({ product }) {
             <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{product.description}</p>
           </CardHeader>
           <CardContent className="space-y-2.5 pb-3">
-            <div className="flex flex-wrap gap-1">
-              {highlights.map(spec => (
-                <Badge key={spec.key} variant="outline" className="text-[10px] font-normal py-0">
-                  {spec.value}{spec.unit ? ` ${spec.unit}` : ''}
+            {product.family?.name && (
+              <div className="flex flex-wrap gap-1">
+                <Badge variant="outline" className="text-[10px] font-normal py-0">
+                  {product.family.name}
                 </Badge>
-              ))}
-            </div>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <RatingBadge rating={product.avgRating} reviewCount={product.reviewCount} />
               {product.verifiedReviewCount > 0 && (
@@ -112,24 +92,17 @@ function ProductCardGrid({ product }) {
         </Card>
       </Link>
       <Link to={`/compare?a=${product.id}`} className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button variant="secondary" size="sm" className="h-6 text-[10px] px-2">Compare</Button>
+        <Button variant="secondary" size="sm" className="h-6 text-[10px] px-2 gap-1">
+          <GitCompareArrows size={10} />
+          Compare
+        </Button>
       </Link>
     </div>
   );
 }
 
 function ProductCardList({ product }) {
-  const allHighlights = [
-    product.specs.find(s => s.key === 'battery_runtime_minutes'),
-    product.specs.find(s => s.key === 'wattage'),
-    product.specs.find(s => s.key === 'battery_charge_time_hours'),
-    product.specs.find(s => s.key === 'length_settings' || s.key === 'attachments_count'),
-    product.specs.find(s => s.key === 'weight_grams'),
-    product.specs.find(s => s.key === 'blade_material'),
-    product.specs.find(s => s.key === 'washable'),
-  ].filter(Boolean);
-
-  const categoryLabel = CATEGORIES.find(c => c.id === product.category)?.label || product.category;
+  const categoryLabel = CATEGORIES.find(c => c.id === product.family?.category)?.label || product.family?.category || '';
 
   return (
     <Card className="group transition-all hover:shadow-md hover:border-primary/20">
@@ -139,7 +112,7 @@ function ProductCardList({ product }) {
             {product.image ? (
               <img src={product.image} alt={product.name} className="w-full h-full object-contain p-3 group-hover:scale-105 transition-transform duration-300" />
             ) : (
-              <span className="text-4xl opacity-20">📦</span>
+              <Package size={40} className="text-muted-foreground/15" />
             )}
           </Link>
           <div className="flex-1 py-4 pr-4 space-y-2 min-w-0">
@@ -157,18 +130,19 @@ function ProductCardList({ product }) {
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{product.description}</p>
               </div>
               <Link to={`/compare?a=${product.id}`} className="shrink-0">
-                <Button variant="outline" size="sm" className="h-7 text-xs">Compare</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5">
+                  <GitCompareArrows size={12} />
+                  Compare
+                </Button>
               </Link>
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-              {allHighlights.map(spec => (
-                <span key={spec.key} className="text-muted-foreground">
-                  <span className="font-medium text-foreground">{displaySpecValue(spec)}</span>
-                  {' '}
-                  {spec.key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace('Minutes', '').replace('Hours', '').replace('Grams', '').trim()}
+            {product.family?.name && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">{product.family.name}</span>
                 </span>
-              ))}
-            </div>
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <RatingBadge rating={product.avgRating} reviewCount={product.reviewCount} />
               {product.verifiedReviewCount > 0 && (
@@ -182,13 +156,25 @@ function ProductCardList({ product }) {
   );
 }
 
-function SidebarFilter({ label, children }) {
+function SidebarFilter({ label, icon: Icon, children }) {
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</h4>
+      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+        {Icon && <Icon size={12} />}
+        {label}
+      </h4>
       {children}
     </div>
   );
+}
+
+function useDebounce(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
 }
 
 export default function ProductsPage() {
@@ -200,6 +186,38 @@ export default function ProductsPage() {
   const sort = searchParams.get('sort') || 'rating-desc';
   const minRating = searchParams.get('rating') || '';
   const view = searchParams.get('view') || 'grid';
+
+  const debouncedQuery = useDebounce(query, 300);
+
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (debouncedQuery) params.set('q', debouncedQuery);
+    if (gender) params.set('gender', gender);
+    if (category) params.set('category', category);
+
+    let cancelled = false;
+    setLoading(true);
+
+    api.get(`/products?${params}`)
+      .then(data => {
+        if (!cancelled) {
+          setProducts(data);
+          setError(null);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [debouncedQuery, gender, category]);
 
   function updateParam(key, value) {
     const params = new URLSearchParams(searchParams);
@@ -213,17 +231,9 @@ export default function ProductsPage() {
     return CATEGORIES.filter(c => c.id !== 'all');
   }, [gender]);
 
-  let filtered = PRODUCTS.filter(p => {
-    const q = query.toLowerCase();
-    const matchesQuery = !q ||
-      p.name.toLowerCase().includes(q) ||
-      p.model.toLowerCase().includes(q) ||
-      p.brand.toLowerCase().includes(q) ||
-      p.family.toLowerCase().includes(q);
-    const matchesGender = !gender || p.gender === gender;
-    const matchesCategory = !category || p.category === category;
+  let filtered = products.filter(p => {
     const matchesRating = !minRating || p.avgRating >= parseFloat(minRating);
-    return matchesQuery && matchesGender && matchesCategory && matchesRating;
+    return matchesRating;
   });
 
   filtered = [...filtered].sort((a, b) => {
@@ -252,21 +262,36 @@ export default function ProductsPage() {
           <p className="text-sm text-muted-foreground mt-0.5">{filtered.length} product{filtered.length !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Input type="search" placeholder="Search..." value={query} onChange={e => setQuery(e.target.value)} className="h-8 w-48 text-sm" />
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              className="h-8 w-48 text-sm pl-8"
+            />
+          </div>
           <div className="flex border rounded-md">
-            <button onClick={() => updateParam('view', 'grid')}
+            <button
+              onClick={() => updateParam('view', 'grid')}
               className={`p-1.5 ${view === 'grid' ? 'bg-muted' : 'hover:bg-muted/50'} rounded-l-md transition-colors`}
-              title="Grid view">
-              <GridIcon />
+              title="Grid view"
+            >
+              <LayoutGrid size={14} />
             </button>
-            <button onClick={() => updateParam('view', 'list')}
+            <button
+              onClick={() => updateParam('view', 'list')}
               className={`p-1.5 ${view === 'list' ? 'bg-muted' : 'hover:bg-muted/50'} rounded-r-md transition-colors`}
-              title="List view">
-              <ListIcon />
+              title="List view"
+            >
+              <List size={14} />
             </button>
           </div>
           <Select value={sort} onValueChange={v => updateParam('sort', v)}>
-            <SelectTrigger className="h-8 w-[150px] text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 w-[150px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               {SORT_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
             </SelectContent>
@@ -277,14 +302,20 @@ export default function ProductsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
         {/* Sidebar */}
         <aside className="space-y-5 lg:sticky lg:top-20 lg:self-start">
-          <Card>
+          <Card className="glass">
             <CardContent className="pt-4 pb-4 space-y-4">
-              <SidebarFilter label="Gender">
+              <SidebarFilter label="Gender" icon={SlidersHorizontal}>
                 <div className="space-y-1">
                   {GENDERS.map(g => (
-                    <button key={g.id} onClick={() => { updateParam('gender', gender === g.id ? '' : g.id); updateParam('category', ''); }}
-                      className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${gender === g.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
-                      {g.icon} {g.label}
+                    <button
+                      key={g.id}
+                      onClick={() => { updateParam('gender', gender === g.id ? '' : g.id); updateParam('category', ''); }}
+                      className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-2 ${
+                        gender === g.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                      }`}
+                    >
+                      <CategoryIcon name={g.icon} size={14} className={gender === g.id ? 'text-primary-foreground' : 'text-muted-foreground'} />
+                      {g.label}
                     </button>
                   ))}
                 </div>
@@ -295,10 +326,20 @@ export default function ProductsPage() {
               <SidebarFilter label="Category">
                 <div className="space-y-1">
                   {availableCategories.map(cat => (
-                    <button key={cat.id} onClick={() => updateParam('category', category === cat.id ? '' : cat.id)}
-                      className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors flex items-center justify-between ${category === cat.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
-                      <span>{cat.icon} {cat.label}</span>
-                      <span className="text-xs opacity-60">{PRODUCTS.filter(p => p.category === cat.id).length}</span>
+                    <button
+                      key={cat.id}
+                      onClick={() => updateParam('category', category === cat.id ? '' : cat.id)}
+                      className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors flex items-center justify-between ${
+                        category === cat.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <CategoryIcon name={cat.icon} size={14} className={category === cat.id ? 'text-primary-foreground' : 'text-muted-foreground'} />
+                        {cat.label}
+                      </span>
+                      <span className="text-xs opacity-60">
+                        {products.filter(p => p.family?.category === cat.id).length}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -306,11 +347,17 @@ export default function ProductsPage() {
 
               <Separator />
 
-              <SidebarFilter label="Rating">
+              <SidebarFilter label="Rating" icon={Star}>
                 <div className="space-y-1">
                   {['4', '3'].map(r => (
-                    <button key={r} onClick={() => updateParam('rating', minRating === r ? '' : r)}
-                      className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors ${minRating === r ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+                    <button
+                      key={r}
+                      onClick={() => updateParam('rating', minRating === r ? '' : r)}
+                      className={`w-full text-left text-sm px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-2 ${
+                        minRating === r ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                      }`}
+                    >
+                      <Star size={12} className={minRating === r ? 'text-primary-foreground fill-primary-foreground' : 'text-amber-400 fill-amber-400'} />
                       {r}+ stars
                     </button>
                   ))}
@@ -320,7 +367,8 @@ export default function ProductsPage() {
               {activeFilterCount > 0 && (
                 <>
                   <Separator />
-                  <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setSearchParams({})}>
+                  <Button variant="ghost" size="sm" className="w-full text-xs gap-1.5" onClick={() => setSearchParams({})}>
+                    <X size={12} />
                     Clear all filters
                   </Button>
                 </>
@@ -331,8 +379,19 @@ export default function ProductsPage() {
 
         {/* Product grid/list */}
         <div>
-          {filtered.length === 0 ? (
+          {loading ? (
             <div className="text-center py-20 space-y-3">
+              <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <p className="text-muted-foreground">Loading products...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-20 space-y-3">
+              <p className="text-destructive">Failed to load products: {error}</p>
+              <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>Retry</Button>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-20 space-y-3">
+              <Package size={40} className="mx-auto text-muted-foreground/30" />
               <p className="text-muted-foreground">No products match your filters</p>
               <Button variant="ghost" size="sm" onClick={() => { setQuery(''); setSearchParams({}); }}>Clear filters</Button>
             </div>
